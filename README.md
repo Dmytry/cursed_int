@@ -207,7 +207,7 @@ Loops, what loops? No benchmarking results, not even a lone contrived example wh
 
 [I tried to make one](https://godbolt.org/z/EzdaEq3c1) without much success. 
 
-Not even vectorization and some very serious loop unrolling (see pmuludq) seem to be impacted by either -fwrapv -fno-strict-overflow or by use of unsigned iterand. I tried a few things, I could get it to generate slightly different code that is placed after the loop, but not different loop body.
+Not even vectorization and some very serious loop unrolling (see pmuludq) seem to be impacted by either -fwrapv -fno-strict-overflow or by use of unsigned iterand. I tried a few things, I could get it to generate slightly different code that is placed after the loop, but couldn't get it to change the body of the loop.
 
 I think this is likely because of a combination of factors:
 
