@@ -211,9 +211,9 @@ Curiously enough, -fwrapv on signed is not quite adequate for signed integers, b
 
 They aren't guaranteed anything, m==MAX_INT is undefined behavior (i++ will overflow). The code may loop forever (e.g. on -O0), or it may never enter the loop, or it can do literally anything else, it can even misbehave prior to entering the loop.
 
-Here's a loop that's guaranteed to terminate: ```if (m < INT_MAX) for (int i = 0; i <= m; i++)``` . With wrap-around overflow that simplifies to ```for (unsigned int i = 0; i < m+1; i++)``` (with m also being unsigned) . 
+Here's a loop that's guaranteed to terminate: ```if (m < INT_MAX) for (int i = 0; i <= m; i++)``` . With wrap-around overflow that would be equivalent to ```for (int i = 0; i < m+1; i++)``` , by the way. 
 
-Bottom line is, people don't usually write loops that aren't guaranteed to terminate. And it is generally a good practice to put the sanitization that prevents looping forever, somewhere near the loop.
+Bottom line is, people don't usually write loops that aren't guaranteed to terminate. And it is generally a good practice to put the sanitization that prevents the infinite loop, somewhere near the loop.
 
 > This helps architectures that have specific loop instructions, as they do in general not handle infinite loops.
 
