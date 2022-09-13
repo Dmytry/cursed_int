@@ -201,26 +201,59 @@ You can go through them, and find out that if you sanitize to avoid overflows, t
 
 Curiously enough, -fwrapv on signed is not quite adequate for signed integers, but that's not very surprising considering it is a hacky compiler option and doesn't carry the same weight as overflow being defined in the standard.
 
-## But loops! Something about loops? Unrolling? Vectorization?
+## But loops! 
 
-Loops, what loops? No benchmarking results, not even a lone contrived example where unrolling or vectorization fails if the iterand is unsigned. (Note that such example could be of great practical interest)
+> The canonical example of why undefined signed overflow helps loop optimizations is that loops like
+>
+> ```for (int i = 0; i <= m; i++)```
+>
+> are guaranteed to terminate for undefined overflow...
 
-[I tried to make one](https://godbolt.org/z/EzdaEq3c1) without much success. 
+They aren't guaranteed anything, m==MAX_INT is undefined behavior (i++ will overflow). The code may loop forever (e.g. on -O0), or it may never enter the loop, or it can do literally anything else, it can even misbehave prior to entering the loop.
+
+Here's a loop that's guaranteed to terminate: ```if (m < INT_MAX) for (int i = 0; i <= m; i++)``` . With wrap-around overflow that simplifies to ```for (unsigned int i = 0; i < m+1; i++)``` (with m also being unsigned) . 
+
+Bottom line is, people don't usually write loops that aren't guaranteed to terminate. And it is generally a good practice to put the sanitization that prevents looping forever, somewhere near the loop.
+
+> This helps architectures that have specific loop instructions, as they do in general not handle infinite loops.
+
+So what? Even if CISC with their specific instructions for everything was still relevant, you can always fix the corner case after the main loop body, like this:
+```
+mov ecx, m 
+cmp ecx, 0
+je l2               ; <- Necessary because we converted for loop into a while loop so we can use the "loop" instruction
+l1:
+... 
+...
+...
+loop l1             ; Almost all of the looping is done by the loop instruction that can't loop forever
+mov ecx, m          ; Extra instructions
+cmp ecx, 0x7fffffff ; For making it
+je l1               ; Loop forever
+l2:
+```
+at the expense of a tiny constant factor slowdown (the three last instructions).
+
+While you're at it, you could output a warning message about a potentially infinite loop.
+## Something else about loops? Unrolling? Vectorization?
+
+[I tried to make an example](https://godbolt.org/z/EzdaEq3c1) without much success. 
 
 Not even vectorization and some very serious loop unrolling (see pmuludq) seem to be impacted by either -fwrapv -fno-strict-overflow or by use of unsigned iterand. I tried a few things, I could get it to generate slightly different code that is placed after the loop, but couldn't get it to change the body of the loop.
 
 I think this is likely because of a combination of factors:
 
 * Undefined overflow is not in fact a blanket license for the compiler to ignore everything having to do integer overflow. (The compiler is not allowed to create new overflows)
-* There's enough other UB to go around:
+* There's enough other UB in most loops:
   * Out of bounds array access is UB.
   * Out of bounds pointer arithmetics is also UB.
 * Typical "for" statement restricts the range of the iterand anyway.
-* When the compiler unrolls a loop, after the loop body there's a piece of code for dealing with the remainder of the loop. The compiler is free to restrict the range for the unrolled portion for optimizations, even without any UB. 
+* The compiler already has to deal with corner cases after the main body of the loop, e.g. for vectorizing.
 * Unsigned iterands are very common in C++, which discourages avoidable reliance on UB overflow.
 * High quality code is very meticulous about avoiding buffer overruns, adding range checks immediately preceding the loop.
+* People typically try to avoid writing potentially endless loops.
 
-Bottom line is, there probably isn't much place for making use of signed UB.
+To get a loop that's significantly improved by UB signed overflow, you need to somehow slip past all these bullet points.
 ## How common are overflow related optimization opportunities in the real world?
 
 According to [this source](https://research.checkpoint.com/2020/optout-compiler-undefined-behavior-optimizations/) , they're extremely rare - they instrumented GCC to print a message any time it removed code based on undefined overflow, and tried it on a number of open source projects. All they found was a few post-checks for overflow that GCC optimized out, in libtiff, causing a security issue. Which had to be rewritten as pre-checks. 
