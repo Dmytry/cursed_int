@@ -251,11 +251,11 @@ I think this is likely because of a combination of factors:
   * Out of bounds pointer arithmetics is also UB.
 * Typical "for" statement restricts the range of the iterand anyway.
 * The compiler already has to deal with corner cases after the main body of the loop, e.g. for vectorizing.
-* Unsigned iterands are very common in C++, which discourages avoidable reliance on UB overflow.
+* Unsigned iterands are very common in C++ , which encourages UB-independent approaches to loop optimization.
 * High quality code is very meticulous about avoiding buffer overruns, adding range checks immediately preceding the loop.
-* People typically try to avoid writing potentially endless loops.
+* People typically try to avoid writing potentially endless loops.'
 
-To get a loop that's significantly improved by UB signed overflow, you need to somehow slip past all these bullet points.
+To find a loop that's significantly improved by UB signed overflow, you need to somehow slip past all these bullet points.
 ## How common are overflow related optimization opportunities in the real world?
 
 According to [this source](https://research.checkpoint.com/2020/optout-compiler-undefined-behavior-optimizations/) , they're extremely rare - they instrumented GCC to print a message any time it removed code based on undefined overflow, and tried it on a number of open source projects. All they found was a few post-checks for overflow that GCC optimized out, in libtiff, causing a security issue. Which had to be rewritten as pre-checks. 
