@@ -211,13 +211,13 @@ Curiously enough, -fwrapv on signed is not quite adequate for signed integers, b
 
 They aren't guaranteed anything, m==MAX_INT is undefined behavior (i++ will overflow). The code may loop forever (e.g. on -O0), or it may never enter the loop, or it can do literally anything else, it can even misbehave prior to entering the loop.
 
-Here's a loop that's guaranteed to terminate: ```if (m < INT_MAX) for (int i = 0; i <= m; i++)``` . With wrap-around overflow that would be equivalent to ```for (int i = 0; i < m+1; i++)``` , by the way. 
+Here's a loop that's guaranteed to terminate: ```if (m < INT_MAX) for (int i = 0; i <= m; i++)``` , not entering the loop if it would loop forever. With unsigned m, you could write ```for (unsigned int i = 0; i < m+1; i++)``` to the same effect.
 
-Bottom line is, people don't usually write loops that aren't guaranteed to terminate. And it is generally a good practice to put the sanitization that prevents the infinite loop, somewhere near the loop.
+Bottom line is, people don't usually write loops that aren't guaranteed to terminate, or might suffer from undefined behavior.
 
 > This helps architectures that have specific loop instructions, as they do in general not handle infinite loops.
 
-So what? Even if CISC with their specific instructions for everything was still relevant, you can always fix the corner case after the main loop body, like this:
+1: You can always use what ever instruction you want, like this:
 ```
 mov ecx, m 
 cmp ecx, 0
@@ -226,15 +226,17 @@ l1:
 ... 
 ...
 ...
-loop l1             ; Almost all of the looping is done by the loop instruction that can't loop forever
+loop l1             ; <- We really want to use that instruction for looping
 mov ecx, m          ; Extra instructions
 cmp ecx, 0x7fffffff ; For making it
 je l1               ; Loop forever
 l2:
 ```
-at the expense of a tiny constant factor slowdown (the three last instructions).
+at the expense of a tiny constant factor slowdown (the three last instructions that fix the corner case which "loop" can't handle).
 
 While you're at it, you could output a warning message about a potentially infinite loop.
+
+2: UB or no UB, compilers seem to use generic conditional jumps for loops. Probably because CISC is well dead. Hence no godbolt example.
 ## Something else about loops? Unrolling? Vectorization?
 
 [I tried to make an example](https://godbolt.org/z/EzdaEq3c1) without much success. 
