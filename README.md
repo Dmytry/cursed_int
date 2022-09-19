@@ -30,7 +30,7 @@ Of course, the standard doesn't specify that the signed overflow *has* to be as 
 
 [source](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n2310.pdf)
 
-(emphasis mine). 
+(emphasis mine).
 ## If Builders Built Buildings the Way Programmers Wrote Programs, Then the First Woodpecker That Came Along Would Destroy Civilization
 
 The basic principle at play here is as following:
@@ -49,33 +49,25 @@ A huge practical problem with the above "cursed integers" example is that it mak
 Note also that a future version of GCC may allow a similar curse in a pure noexcept function, without any red flags like unchecked array access. Maybe already does.
 ## What's an integer overflow, anyway?
 
-It's when you compute something (e.g. an addition) and find out that the result wouldn't fit into the number's range.
-
-Note how we just defined the overflow as something which you will know during or after performing the calculation.
+It's when you compute something (e.g. an addition) and find out that the result wouldn't fit into the number's range. Note how we just defined the overflow as something which you will know during or after performing the calculation.
 
 The hardware (x86, x64, ARM) follows that same pattern; the ALU has overflow and carry outputs. When you perform a 64-bit addition, hardware can give you 65th bit of the result. Even if it's [made of relays](https://www.youtube.com/watch?v=k1hJoalcK68). 
 
-For unsigned numbers, you can write something like ```x=a*b; if(b!=0 && x/b != a)``` , and the compiler is able to simplify this to a multiply instruction followed by a jump-if-not-overflow instruction.
+For unsigned numbers, you can write something like ```x=a*b; if(b!=0 && x/b != a)``` , and the compiler is able to simplify this to a multiply instruction followed by a jump-if-not-overflow instruction. The standard defining the arithmetics as modulo 2^N (and thus not overflowing) does not stand in the way of using the overflow flag which is available on hardware.
 
-To the contrary, for signed numbers, with the signed overflow leading to *undefined behavior* by the standard, the standard effectively prohibits after-the-fact detection of overflow.
-
-The code has to adopt an inverse approach - it has to prevent the overflow ahead of time, being careful that the calculations which predict the overflow do not themselves overflow. (Prevention of overflow in a multiply is almost comically cumbersome)
+For signed numbers, to the contrary, with the signed overflow leading to *undefined behavior* by the standard, the standard effectively prohibits after-the-fact detection of overflow. The code has to adopt an inverse approach - it has to prevent signed overflow ahead of time, being careful that the calculations which predict the overflow do not themselves overflow. (Prevention of overflow in a multiply is almost comically cumbersome)
 
 Murphy's law being in effect, the optimizer that is smart enough to remove security checks because it's UB, is nowhere near smart enough to replace overflow prevention with less costly overflow detection.
 
-This makes signed overflow rather unique comparing to other undefined behaviors in the standard. Other undefined behaviors do not significantly interfere with mitigation of the corresponding logic bugs.
-
-But signed overflow being undefined does: the typical pattern for preventing overflow-related logic bugs is to verify the result, which requires well defined behavior.
+This makes signed overflow rather unique comparing to other undefined behaviors in the standard. Other undefined behaviors do not significantly interfere with mitigation of the corresponding logic bugs. But signed overflow being undefined does: the typical pattern for preventing overflow-related logic bugs is to verify the result, which requires well defined behavior.
 
 Until relatively recently in the life of C and C++ languages, the status quo was to simply forgo such mitigations and hope for the best. Shove software out of the door and not worry about security or reliability.
 
-Fragments of this mindset unfortunately permeate performance discussions to this day.
+Fragments of this mindset unfortunately permeate performance discussions to this day:
 
-The default assumption in performance discussions is that the code being optimized does not contain conditionals to reliably guard against logic bugs or undefined behavior. 
-
-And there is no concern that a facet of the standard may force such conditionals to be unnecessarily slow or complex to write, because the default expectation is that nobody's going to bother writing any.
-
-It is presumed that a library function typically delegates the task of guarding against UB to the user of that function, and thus the triggering of UB is a source of unique information about input values' range. 
+* It is presumed that the code being optimized does not contain conditionals to reliably guard against logic bugs or undefined behavior. 
+* There is no concern that a facet of the standard may force such conditionals to be unnecessarily slow or complex to write (the default expectation is simply that nobody's going to bother writing any).
+* It is presumed that a library function typically delegates the task of guarding against UB to the user of that function, and thus the triggering of UB is a source of unique information about input values' range. 
 
 All of those assumptions are, however, increasingly false for production software - the code you use in your daily life and whose outputs you wait on, the code which wastes non negligible number of kilowatt-hours. In short, the code that is actually worth optimizing. 
 
@@ -136,13 +128,16 @@ Ok, sanitizing for multiplication is hard. Sanitizing for addition is easy, mayb
 
 [Nope, it couldn't](https://godbolt.org/#g:!((g:!((g:!((h:codeEditor,i:(filename:'1',fontScale:14,fontUsePx:'0',j:1,lang:c%2B%2B,selection:(endColumn:1,endLineNumber:33,positionColumn:1,positionLineNumber:1,selectionStartColumn:1,selectionStartLineNumber:33,startColumn:1,startLineNumber:1),source:'%23include+%3Cstdio.h%3E%0A%23include+%3Cstdlib.h%3E%0A%23include+%3Cstring.h%3E%0A%23include+%3Climits.h%3E%0A%0A//+Allow+easy+experimentation+on+different+types%0A%23define+my_int+long+long+int%0A%23define+my_MAX+LLONG_MAX%0A%23define+my_MIN+LLONG_MIN%0A%0Astatic+my_int+safe_sum(my_int+si_a,+my_int+si_b)+%7B%0A++signed+int+sum%3B%0A++if+(((si_b+%3E+0)+%26%26+(si_a+%3E+(my_MAX+-+si_b)))+%7C%7C%0A++++++((si_b+%3C+0)+%26%26+(si_a+%3C+(my_MIN+-+si_b))))+%7B%0A++++/*+Handle+error+*/%0A++++printf(%22Overflow%5Cn%22)%3B%0A++++return+0%3B%0A++%7D+else+%7B%0A++++return+si_a+%2B+si_b%3B%0A++%7D%0A++/*+...+*/%0A%7D%0A%0Aint+main(int+argc,+char**+argv)+%7B%0A++++if(argc!!%3D3)return+1%3B%0A++++my_int+x%3Dstrtoll(argv%5B1%5D,+nullptr,+10)%3B%0A++++my_int+y%3Dstrtoll(argv%5B2%5D,+nullptr,+10)%3B%0A++++my_int+z%3B%0A++++z%3Dsafe_sum(x,y)%3B++++%0A++++printf(%22sum%3D%25lld%22,+z)%3B%0A++++return+0%3B%0A%7D%0A'),l:'5',n:'0',o:'C%2B%2B+source+%231',t:'0')),k:39.74132863021753,l:'4',n:'0',o:'',s:0,t:'0'),(g:!((h:compiler,i:(compiler:g122,filters:(b:'0',binary:'1',commentOnly:'0',demangle:'0',directives:'0',execute:'1',intel:'0',libraryCode:'0',trim:'1'),flagsViewOpen:'1',fontScale:14,fontUsePx:'0',j:1,lang:c%2B%2B,libs:!(),options:'-O3',selection:(endColumn:1,endLineNumber:1,positionColumn:1,positionLineNumber:1,selectionStartColumn:1,selectionStartLineNumber:1,startColumn:1,startLineNumber:1),source:1,tree:'1'),l:'5',n:'0',o:'x86-64+gcc+12.2+(C%2B%2B,+Editor+%231,+Compiler+%231)',t:'0')),k:26.92533803644916,l:'4',n:'0',o:'',s:0,t:'0'),(g:!((h:executor,i:(argsPanelShown:'0',compilationPanelShown:'0',compiler:g122,compilerOutShown:'0',execArgs:'-1+-9223372036854775808',execStdin:'',fontScale:14,fontUsePx:'0',j:1,lang:c%2B%2B,libs:!(),options:'-O3',source:1,stdinPanelShown:'1',tree:'1',wrap:'1'),l:'5',n:'0',o:'Executor+x86-64+gcc+12.2+(C%2B%2B,+Editor+%231)',t:'0')),k:33.33333333333333,l:'4',n:'0',o:'',s:0,t:'0')),l:'2',n:'0',o:'',t:'0')),version:4)
 
+That's it, folks. For every arithmetic operation you have to do a bunch of branching and an inverse operation.
+
 And you absolutely should not be expecting to get better performance out of using signed numbers instead of unsigned.
 
 If you switch from unsigned to signed, you will have to replace all your after-the-fact overflow checks with ahead-of-time overflow checks, that can be dramatically slower and which the compiler will not optimize well.
 
+I have a nagging suspicion that the standard (or people talking about how it enables optimizations in general) do not expect you or anyone to actually *do* anything like this; I think they kind of assume that you would just say that giving your code an input that causes an overflow is undefined behavior, and let someone else worry about it. (Which would of course be an unacceptable practice for most production code).
 ## What kind of code benefits from UB overflow derived optimization?
 
-Not your Linux kernel or your web browser, or their components. They turned those optimizations off using -fwrapv or -fno-strict-overflow . (They're also adding other changes that make UB irrelevant. -fwrapv - type flags are a kludge and not reliable enough).
+Not your Linux kernel or your web browser, or their components. Not only are they careful about avoiding overflows, they also turn those optimizations off using -fwrapv or -fno-strict-overflow.
 
 And not the code that uses unsigned numbers for sizes and indices, either (which includes much of C++ code where use of templates creates many optimization opportunities).
 
@@ -234,7 +229,7 @@ They aren't guaranteed anything, m==MAX_INT is undefined behavior (i++ will over
 
 Here's a loop that's guaranteed to terminate: ```if (m < INT_MAX) for (int i = 0; i <= m; i++)``` , not entering the loop if it would loop forever. With unsigned m, you could write ```for (unsigned int i = 0; i < m+1; i++)``` to the same effect.
 
-Bottom line is, people don't usually write loops that aren't guaranteed to terminate, or might suffer from undefined behavior.
+It's kind of bad practice to write loops that could loop forever in a corner case.
 
 > This helps architectures that have specific loop instructions, as they do in general not handle infinite loops.
 
@@ -258,32 +253,32 @@ The cost is negligible, since the inner loop remains the same.
 
 While you're at it, you could output a warning message about a potentially infinite loop.
 
-2: UB or no UB, CISC style instructions like [loop](https://stackoverflow.com/questions/35742570/why-is-the-loop-instruction-slow-couldnt-intel-have-implemented-it-efficiently) had been slow since the late 1980s. Modern instruction sets don't even have those.
+2: UB or no UB, CISC style instructions like [loop had been slow since the late 1980s.](https://stackoverflow.com/questions/35742570/why-is-the-loop-instruction-slow-couldnt-intel-have-implemented-it-efficiently) Modern instruction sets don't even have those.
 ## Something else about loops? Unrolling? Vectorization?
 
-[I tried to make an example](https://godbolt.org/z/EzdaEq3c1) without much success. 
+[I tried to make an example](https://godbolt.org/z/EzdaEq3c1) without much success.
 
-Not even vectorization and some very serious loop unrolling (see pmuludq) seem to be impacted by either -fwrapv -fno-strict-overflow or by use of unsigned iterand. I tried a few things, I could get it to generate slightly different code that is placed after the loop, but couldn't get it to change the body of the loop.
+Not even vectorization and loop unrolling (see pmuludq) seem to be impacted by either -fwrapv -fno-strict-overflow or by use of unsigned iterand. That also holds for wider vectorization (when setting a recent -march=... flag).
+
+I tried a few things, I could get it to generate slightly different code that is placed after the loop, but couldn't get it to change the body of the loop.
 
 I think this is likely because of a combination of factors:
 
-* Undefined overflow is not in fact a blanket license for the compiler to ignore everything having to do integer overflow; any new overflows caused by optimizations should still work out to the same end result.
+* The compiler is always free to fix up corner cases after the loop (and does this already for unrolling and vectorization).
+* Unsigned iterands are very common in C++ , which encourages UB-independent approaches to loop optimization.
 * There's enough other UB in most loops:
   * Out of bounds array access is UB.
   * Out of bounds pointer arithmetics is also UB.
 * Typical "for" statement restricts the range of the iterand anyway.
-* The compiler already has to deal with corner cases after the main body of the loop, e.g. for vectorizing.
-* Unsigned iterands are very common in C++ , which encourages UB-independent approaches to loop optimization.
-* High quality code is very meticulous about avoiding buffer overruns, adding range checks immediately preceding the loop.
-* People typically try to avoid writing potentially endless loops.
 
 To find a loop that's significantly improved by undefined behavior signed overflow, you need to somehow slip past all these bullet points.
 
+I think the fatal one is the first one; playing around with the optimizer all I could get was some minor changes to the code which is handling the cases where the number of iterations isn't evenly divisible by however much it vectorized.
 ## But some platforms got saturating math.
 
 And without undefined behavior you could write something nice and portable like
 ```
-y=x+c;
+y=x+150;
 if(y<x)y=INT_MAX;
 ```
 and a good compiler could [convert that](https://stackoverflow.com/questions/121240/how-to-do-unsigned-saturating-addition-in-c) to a single saturating add opcode, on those platforms. 
@@ -291,7 +286,6 @@ and a good compiler could [convert that](https://stackoverflow.com/questions/121
 Alas, not for signed numbers, because of undefined behavior.
 
 I get it, the idea here is to start arguing that in principle there could exist a hypothetical computer that only has saturating operations or where saturating operations are faster. That seems rather silly; C requires unsigned numbers to wrap around. And a saturating adder is nothing more than a normal adder with an extra circuit for saturation, anyway, a circuit you can typically enable or disable.
-
 ## How common are overflow related optimization opportunities in the real world?
 
 According to [this source](https://research.checkpoint.com/2020/optout-compiler-undefined-behavior-optimizations/) , they're extremely rare - they instrumented GCC to print a message any time it removed code based on undefined overflow, and tried it on a number of open source projects. All they found was a few post-checks for overflow that GCC optimized out, in libtiff, causing a security issue. Which had to be rewritten as pre-checks. 
