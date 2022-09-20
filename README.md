@@ -2,9 +2,10 @@
 
 An example of how undefined behavior signed overflow can 'infect' a number and cause removal of common types of range checks (e.g. on array access), with significant security implications. 
 
+It is quite common to sanitize inputs to a function. However, any arithmetics in sanitization is extremely hazardous, because an overflow during input sanitization may easily result in removal of subsequent array bounds checks. 
+
 It is pretty well known that signed overflow's undefined behavior can result in rather bizzare changes to what the code does
-(such as making a finite loop infinite by pre-multiplying the iterand), but I believe this particular specific case
-is most relevant to realistic security exploits.
+(such as making a finite loop infinite by changing the iteration step to eliminate a multiply within the loop), but I believe this particular specific case is most relevant to realistic security exploits.
 
 Use GCC 12 with -O2 or -O3 flag to build the samples for maximum craziness. Run them with 2147483647 as the command line argument.
 
@@ -30,7 +31,9 @@ Of course, the standard doesn't specify that the signed overflow *has* to be as 
 
 [source](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n2310.pdf)
 
-(emphasis mine).
+(emphasis mine). 
+
+When both the compiler *and the code being compiled* are harmoniously "ignoring the situation completely with unpredictable results", certain optimizations can be made that can't possibly be made otherwise.
 ## If Builders Built Buildings the Way Programmers Wrote Programs, Then the First Woodpecker That Came Along Would Destroy Civilization
 
 The basic principle at play here is as following:
@@ -44,7 +47,7 @@ The basic principle at play here is as following:
 
 This kind of thing is why people say things like "software engineering is not real engineering".
 
-A huge practical problem with the above "cursed integers" example is that it makes much easier for dangerous code to slip in unnoticed.
+A huge practical problem with the above "cursed integers" example is that it makes much easier for dangerous code to slip in unnoticed. A seemingly harmless sanitization routine, which looks like "defense in depth", or is meant to better report invalid argument errors, may cause subsequent (or, in theory, preceding) secure code to become non secure.
 
 Note also that a future version of GCC may allow a similar curse in a pure noexcept function, without any red flags like unchecked array access. Maybe already does.
 ## What's an integer overflow, anyway?
@@ -57,7 +60,7 @@ For unsigned numbers, you can write something like ```x=a*b; if(b!=0 && x/b != a
 
 For signed numbers, to the contrary, with the signed overflow leading to *undefined behavior* by the standard, the standard effectively prohibits after-the-fact detection of overflow. The code has to adopt an inverse approach - it has to prevent signed overflow ahead of time, being careful that the calculations which predict the overflow do not themselves overflow. (Prevention of overflow in a multiply is almost comically cumbersome)
 
-Murphy's law being in effect, the optimizer that is smart enough to remove security checks because it's UB, is nowhere near smart enough to replace overflow prevention with less costly overflow detection.
+Murphy's law being in effect, the optimizer that is smart enough to remove security checks because of some UB, is nowhere near smart enough to replace overflow prevention with less costly overflow detection.
 
 This makes signed overflow rather unique comparing to other undefined behaviors in the standard. Other undefined behaviors do not significantly interfere with mitigation of the corresponding logic bugs. But signed overflow being undefined does: the typical pattern for preventing overflow-related logic bugs is to verify the result, which requires well defined behavior.
 
@@ -134,7 +137,7 @@ And you absolutely should not be expecting to get better performance out of usin
 
 If you switch from unsigned to signed, you will have to replace all your after-the-fact overflow checks with ahead-of-time overflow checks, that can be dramatically slower and which the compiler will not optimize well.
 
-I have a nagging suspicion that the standard (or people talking about how it enables optimizations in general) do not expect you or anyone to actually *do* anything like this; I think they kind of assume that you would just say that giving your code an input that causes an overflow is undefined behavior, and let someone else worry about it. (Which would of course be an unacceptable practice for most production code).
+I have a slight suspicion that the standard (or people talking about how it enables optimizations in general) do not expect you or anyone to actually *do* anything like this, given just how cumbersome it is. Instead perhaps you document that your function has undefined behavior if the parameters cause an integer overflow. Of course, that's unacceptable for production code that accepts untrusted inputs.
 ## What kind of code benefits from UB overflow derived optimization?
 
 Not your Linux kernel or your web browser, or their components. Not only are they careful about avoiding overflows, they also turn those optimizations off using -fwrapv or -fno-strict-overflow.
@@ -294,6 +297,8 @@ According to [this source](https://research.checkpoint.com/2020/optout-compiler-
 To this day, GCC still can't optimize pre-checks down to the jo or jno (or similar) , so all they got out of it in the end was updated code with a slower form of overflow test as required by the standard, and no optimization opportunities.
 
 This strongly suggests that undefined signed overflow in the standard, on the whole, probably resulted in slower production code.
+
+To summarize, it seems that those overflow-related optimizations only occur when both the compiler *and the code being compiled* are "ignoring the situation completely with unpredictable results", which is increasingly uncommon in production code.
 ## Why is signed overflow undefined behavior in the first place, anyway? 
 
 The original rationale for not specifying integers was to allow compilers to use native 
