@@ -173,7 +173,7 @@ if( c > 0 && x <= std::numeric_limits<decltype(x)>::max()/c && x >= std::numeric
     if(x*c>0){....}
 }
 ```
-This admittedly looks quite contrived because a programmer would find it easier to avoid multiplication by c than to perform input sanitization for the multiplication but I'll roll with it.
+This admittedly looks quite contrived because it is easier for the programmer to simplify out the multiply than to sanitize for it, but I'll roll with it.
 
 Note that ```(x * c) cmp 0  ->   x cmp 0``` above no longer depend on undefined behavior in the standard at all, since the range of x is limited and the compiler should know that ``` x*c ``` does not overflow, and so it can be replaced with x. That optimization can now be performed even for unsigned numbers.
 
@@ -273,7 +273,7 @@ I think this is likely because of a combination of factors:
 
 To find a loop that's significantly improved by undefined behavior signed overflow, you need to somehow slip past all these bullet points.
 
-I think the fatal one is the first one; playing around with the optimizer all I could get was some minor changes to the code which is handling the cases where the number of iterations isn't evenly divisible by however much it vectorized.
+I think the fatal one is the first one. There's no reason for a corner case at the end of the loop to impact the loop itself.
 ## But some platforms got saturating math.
 
 And without undefined behavior you could write something nice and portable like
@@ -281,14 +281,15 @@ And without undefined behavior you could write something nice and portable like
 y=x+150;
 if(y<x)y=INT_MAX;
 ```
-and a good compiler could [convert that](https://stackoverflow.com/questions/121240/how-to-do-unsigned-saturating-addition-in-c) to a single saturating add opcode, on those platforms. 
+and a good compiler could [convert that](https://stackoverflow.com/questions/121240/how-to-do-unsigned-saturating-addition-in-c) to a single saturating add opcode, on those platforms.
+
 
 Alas, not for signed numbers, because of undefined behavior.
 
-I get it, the idea here is to start arguing that in principle there could exist a hypothetical computer that only has saturating operations or where saturating operations are faster. That seems rather silly; C requires unsigned numbers to wrap around. And a saturating adder is nothing more than a normal adder with an extra circuit for saturation, anyway, a circuit you can typically enable or disable.
+I get it, the idea here is to start arguing that in principle there could exist a hypothetical computer that only has saturating operations or where saturating operations are faster. That seems rather silly; how would you go about implementing longer integers on that computer? Or C's unsigned numbers? A saturating adder is nothing more than a normal adder with an extra circuit for saturation, so you'd just implement a way to disable that circuit.
 ## How common are overflow related optimization opportunities in the real world?
 
-According to [this source](https://research.checkpoint.com/2020/optout-compiler-undefined-behavior-optimizations/) , they're extremely rare - they instrumented GCC to print a message any time it removed code based on undefined overflow, and tried it on a number of open source projects. All they found was a few post-checks for overflow that GCC optimized out, in libtiff, causing a security issue. Which had to be rewritten as pre-checks. 
+According to [this source](https://research.checkpoint.com/2020/optout-compiler-undefined-behavior-optimizations/) , they're extremely rare - they instrumented GCC to print a message any time it removed code based on undefined overflow, and tried it on a number of open source projects. All they found was a few post-checks for overflow that GCC optimized out, in libtiff, causing a security issue. Which had to be rewritten as pre-checks.
 
 To this day, GCC still can't optimize pre-checks down to the jo or jno (or similar) , so all they got out of it in the end was updated code with a slower form of overflow test as required by the standard, and no optimization opportunities.
 
