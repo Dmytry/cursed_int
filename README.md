@@ -256,7 +256,7 @@ The cost is negligible, since the inner loop remains the same.
 
 While you're at it, you could output a warning message about a potentially infinite loop.
 
-2: UB or no UB, CISC style instructions like [loop had been slow since the late 1980s.](https://stackoverflow.com/questions/35742570/why-is-the-loop-instruction-slow-couldnt-intel-have-implemented-it-efficiently) Modern instruction sets don't even have those.
+2: UB or no UB, CISC style instructions like [loop had been slow since the late 1980s.](https://stackoverflow.com/questions/35742570/why-is-the-loop-instruction-slow-couldnt-intel-have-implemented-it-efficiently) Modern instruction sets don't even have those. I had to write that "loop" example by hand.
 ## Something else about loops? Unrolling? Vectorization?
 
 [I tried to make an example](https://godbolt.org/z/EzdaEq3c1) without much success.
@@ -279,15 +279,15 @@ To find a loop that's significantly improved by undefined behavior signed overfl
 I think the fatal one is the first one. There's no reason for a corner case at the end of the loop to impact the loop itself.
 ## But some platforms got saturating math.
 
-And without undefined behavior you could write something nice and portable like
+And without undefined behavior you can write something nice and portable like
 ```
 y=x+150;
-if(y<x)y=INT_MAX;
+if(y<x)y=UINT_MAX;
 ```
 and a good compiler could [convert that](https://stackoverflow.com/questions/121240/how-to-do-unsigned-saturating-addition-in-c) to a single saturating add opcode, on those platforms.
 
 
-Alas, not for signed numbers, because of undefined behavior.
+Alas, not for signed numbers, because of undefined behavior. (As established earlier, pre-checks for overflow do not get optimized out.)
 
 I get it, the idea here is to start arguing that in principle there could exist a hypothetical computer that only has saturating operations or where saturating operations are faster. That seems rather silly; how would you go about implementing longer integers on that computer? Or C's unsigned numbers? A saturating adder is nothing more than a normal adder with an extra circuit for saturation, so you'd just implement a way to disable that circuit.
 ## How common are overflow related optimization opportunities in the real world?
@@ -298,7 +298,7 @@ To this day, GCC still can't optimize pre-checks down to the jo or jno (or simil
 
 This strongly suggests that undefined signed overflow in the standard, on the whole, probably resulted in slower production code.
 
-To summarize, it seems that those overflow-related optimizations only occur when both the compiler *and the code being compiled* are "ignoring the situation completely with unpredictable results", which is increasingly uncommon in production code.
+To summarize, it seems that those overflow-related optimizations only occur when both the compiler *and the code being compiled* are "ignoring the situation completely with unpredictable results", which is increasingly rare in production code due to security implications of "unpredictable results".
 ## Why is signed overflow undefined behavior in the first place, anyway? 
 
 The original rationale for not specifying integers was to allow compilers to use native 
@@ -327,7 +327,7 @@ Note that this does not necessarily mean the resulting value has to be defined i
 
 Leaving it under-specified would be less than ideal, but nowhere near as bad as the status quo. 
 
-As for optimization impact, without solid benchmarking data on production quality code those concerns should be summarily dismissed. When someone claims an improvement, the onus is on them to demonstrate said improvement.
+As for compiler optimization impact, without solid benchmarking data on production quality code those concerns should be summarily dismissed. When someone claims an improvement, the onus is on them to demonstrate said improvement.
 
 An alternative is to define signed overflow behavior as part of the ABI for the platform, alongside definition of floating point numbers as conformant to IEEE standard. With the same justification as for floating point number standardization.
 
