@@ -45,8 +45,6 @@ The basic principle at play here is as following:
 * Therefore the central load bearing column could be omitted.
 * Oftentimes, nobody inspects the building and catches the problem, so it just falls down. 
 
-This kind of thing is why people say things like "software engineering is not real engineering".
-
 A huge practical problem with the above "cursed integers" example is that it makes much easier for dangerous code to slip in unnoticed. A seemingly harmless sanitization routine, which looks like "defense in depth", or is meant to better report invalid argument errors, may cause subsequent (or, in theory, preceding) secure code to become non secure.
 
 Note also that a future version of GCC may allow a similar curse in a pure noexcept function, without any red flags like unchecked array access. Maybe already does.
@@ -285,7 +283,6 @@ y=x+150;
 if(y<x)y=UINT_MAX;
 ```
 and a good compiler could [convert that](https://stackoverflow.com/questions/121240/how-to-do-unsigned-saturating-addition-in-c) to a single saturating add opcode, on those platforms.
-
 
 Alas, not for signed numbers, because of undefined behavior. (As established earlier, pre-checks for overflow do not get optimized out.)
 
