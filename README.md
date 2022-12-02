@@ -2,6 +2,23 @@
 
 An example of how undefined behavior signed overflow can 'infect' a number and cause removal of common types of range checks (e.g. on array access), with significant security implications. 
 
+In particular, with GCC 12+, code like following:
+
+```
+std::array<int, N> some_array;
+void curse(int b)
+{
+    ... some magic ...
+}
+void seemingly_secure(int b){    
+    curse(b);
+    if(b>=0 && b<some_array.size()){
+      std::cout<<some_array.at(b)<<std::endl;
+    }
+}
+```
+seemingly_secure can access the array out of bounds, despite checking for the array range both explicitly and inside array::at . See cursed_integer.cpp for a working compilable example.
+
 It is quite common to sanitize inputs to a function. However, any arithmetics in sanitization is extremely hazardous, because an overflow during input sanitization may easily result in removal of subsequent array bounds checks. 
 
 It is pretty well known that signed overflow's undefined behavior can result in rather bizzare changes to what the code does
